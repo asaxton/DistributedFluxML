@@ -3,7 +3,8 @@
 
 
 ## Getting started
-
+Comming soon
+### Opt Out All Reduce
 ```
 using Distributed
 p = addProc(3)
