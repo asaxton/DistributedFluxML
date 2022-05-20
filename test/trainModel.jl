@@ -1,21 +1,14 @@
-# jlDistributedFluxML
+@testset "train model" begin
 
-This package is to be used with FluxML to train, evalueate (inference), and anayze models on a distributed cluster. At the moment only the Slurm cluster manager has been tested.
-
-## Getting started
-Comming soon
-
-### Training
-This examples assumes you have already partitioned data and serialized this data to `_shard_file_list`
-```
-    using Distributed
-    p = addProc(3)
-
-    @everywhere using DistributedFluxML
-
+    mockData_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2]...,"mockData")
+    _shard_file_list = ["iris_df_1.jlb",
+                        "iris_df_2.jlb",
+                        "iris_df_3.jlb"]
 
     batch_size=8
     epochs = 50
+
+    shard_file_list = [joinpath(mockData_path, sf) for sf in _shard_file_list];
 
     deser_fut = [@spawnat w global rawData = deserialize(f)
                  for (w, f) in zip(p, shard_file_list)]
@@ -52,7 +45,7 @@ This examples assumes you have already partitioned data and serialized this data
     # ^^^ shift workers to reuse workers as ^^^
     # ^^^ remote data hosts ^^^
     datRemChansDict = Dict(k => @fetchfrom w datRemChan for (k,w) in zip(p, trainWorkers_shift))
-
+    
     loss_f = Flux.Losses.logitcrossentropy
     opt = Flux.Optimise.ADAM(0.001)
 
@@ -60,27 +53,27 @@ This examples assumes you have already partitioned data and serialized this data
 
     empty!(status_array)
     DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p; status_chan)
-```
 
+    finished_workers = Set([s[:myid] for s in status_array if s[:statusName] == "do_train_on_remote.finished"])
+    test_finshed_res = @test finished_workers == Set(p)
 
-### Opt Out All Reduce
-```
-using Distributed
-p = addProc(3)
+    if isa(test_finshed_res, Test.Pass)
+        remote_params = [@fetchfrom w Flux.params(DistributedFluxML.model) for w in p]
+        θ = Flux.params(model)
+        @test all(θ .≈ remote_params[1])
+        @test all(θ .≈ remote_params[2])
+        @test all(θ .≈ remote_params[3])
+    end
 
-@everywhere using DistributedFluxML
-
-DistributedFluxML.OptOutAllReduce.init(p)
-
-mock_vals = [1,2,3]
-
-allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
-            for (v,w) in zip(mock_vals,p)]
-[fetch(fut) for fut in allR_fut] # [(6,3), (6,3), (6,3)]
-
-mock_vals = [1,:Skip,3]
-
-allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
-            for (v,w) in zip(mock_vals,p)]
-[fetch(fut) for fut in allR_fut] # [(4,2), (4,2), (4,2)]
-```
+    global log_loss_dict = Dict(w => [(s[:step], log(s[:loss]))
+                                      for s in status_array
+                                      if s[:statusName] == "do_train_on_remote.step.grad" && s[:myid] == w]
+                                for w in p)
+    raw_data= vcat(values(log_loss_dict)...)
+    raw_data_trunk = [l for l in raw_data if l[1] > epoch_length_worker*1]
+    data = DataFrame(raw_data_trunk)
+    rename!(data, [:Step, :LLoss])
+    global ols = lm(@formula(LLoss ~ Step), data)
+    @test coef(ols)[2] < 1e-4 # tests if loss is decaying
+    @test ftest(ols.model).pval < 1e-20 # tests if loss is decaying
+end

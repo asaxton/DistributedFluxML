@@ -17,6 +17,10 @@ using Distributed
 - Nothing
 """
 function init(_allReduceWorkers; ReduceType=Any, ChanDepth=2)
+    if any([@fetchfrom w isdefined(OptOutAllReduce, :finished_init)
+            for w in _allReduceWorkers])
+        return
+    end
     totAllReduceChan = Dict(w_i => RemoteChannel(()->Channel{ReduceType}(ChanDepth), w_i)
                          for w_i in _allReduceWorkers)
     n_w = length(_allReduceWorkers)
