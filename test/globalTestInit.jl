@@ -1,4 +1,6 @@
 using Test
+using Pkg
+Pkg.instantiate()
 using Distributed
 using ClusterManagers
 using GLM
