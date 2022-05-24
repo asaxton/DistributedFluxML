@@ -142,7 +142,7 @@ unit_test_example_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2].
     train!(loss, model, data, opt, workers;
            cb, save_on_step_cb, status_chan, save_model_dir, device)
 
-  Uses a `loss` function and training `data` to improve the model's parameters according to a particular optimisation rule `opt`. Runs the training loop in parellel on `workers`, agrigates 
+  Uses a `loss` function and training `data` to improve the `model` parameters according to a particular optimisation rule `opt`. Runs the training loop in parellel on `workers`, agrigates the gradients through an **allReduce**, then updates the model parameters.
 
 # Example
 See test dir $(unit_test_example_path), in particular $(joinpath(unit_test_example_path, "trainModel.jl")), for more details.
