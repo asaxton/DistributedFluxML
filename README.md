@@ -1,12 +1,12 @@
 # jlDistributedFluxML
 
-This package is to be used with FluxML to train, evalueate (inference), and anayze models on a distributed cluster. At the moment only the Slurm cluster manager has been tested.
+This package is to be used with FluxML to train, evaluate (inference), and analyze models on a distributed cluster. At the moment only the Slurm cluster manager has been tested.
 
 ## Getting started
 Comming soon
 
 ### Training
-This examples assumes you have already partitioned data and serialized this data to `_shard_file_list`
+These examples assumes that you have already partitioned the data into multiple `DataFrame`s and serialized them using `Serialization` package  into `shard_file_list`
 ```
     using Distributed
     p = addProc(3)
@@ -22,7 +22,7 @@ This examples assumes you have already partitioned data and serialized this data
     for fut in deser_fut
         wait(fut)
     end
-    epoch_length_worker = @fetchfrom p[1] nrow(rawData)
+
     @everywhere p labels = ["Iris-versicolor", "Iris-virginica", "Iris-setosa"]
 
     @everywhere p x_array =

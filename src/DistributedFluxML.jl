@@ -214,6 +214,9 @@ When `train!` returns, it will have updated the parameters of `model`.
 
 # Returns
 - `nothing`
+
+# Throws
+- `nothing`
 """
 function train!(_loss_f, _model::Chain, _data,
                 _opt::AbstractOptimiser, trainWorkers;
@@ -250,25 +253,6 @@ function train!(_loss_f, _model::Chain, _data,
     for (p1,p2) in zip(θ, θ_rem)
         copy!(p1, p2)
     end
-end
-
-
-"""
-Not implimented yet
-"""
-function train_seq!(loss, pars::Params, data,
-                opt::AbstractOptimiser, workers;
-                cb=()->nothing,
-                status_chan=nothing,
-                model_snapshot_dir="./",
-                device=gpu)
-    
-end
-
-
-"""
-"""
-function evaluate_model(model, data)
 end
 
 end # module
