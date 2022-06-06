@@ -309,8 +309,9 @@ function eval_model(saved_model_dir::String, model, _data, workers;
 end
 
 """
-
-  eval_model(model, data, evalWorkers; status_chan=nothing, get_step=nothing, device=gpu)
+    eval_model(model, data, evalWorkers;
+               status_chan=nothing, get_step=nothing,
+               device=gpu)
 
   This function evaluates the model on a set of data partition accros many workers. `eval_model` will deploy `model` and the approprate `RemoteChannel` from `data` to `evalWorkers`. There, it will call `model(x)` on the data iterated by `data[myid()]`. Finally, the results will be fetch and agrigated into a single array.
 
