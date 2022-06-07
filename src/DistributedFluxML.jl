@@ -126,7 +126,7 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
             serialize(save_model_f, (step, θ))
             flush(save_model_f)
             cond_put!(status_chan, makeStatDict("do_train_on_remote.step.saved_model";
-                                               :step=>step))
+                                                :step=>step))
         end
 
     end
@@ -226,11 +226,6 @@ function train!(_loss_f, _model::Chain, _data,
                 saved_model_dir=nothing,
                 device=gpu)
 
-    if status_chan == nothing
-        global _status_chan = RemoteChannel(()->Channel{Any}(10000), myid())
-    else
-        global _status_chan = status_chan
-    end
     OptOutAllReduce.init(trainWorkers)
     
     model_fut = [@spawnat w global model = _model |> device for w in trainWorkers];
@@ -247,12 +242,105 @@ function train!(_loss_f, _model::Chain, _data,
                                             save_on_step_cb=st -> true)
         push!(train_fut, fut)
     end
+
     wait.(train_fut)
+
     θ = Flux.params(_model)
     θ_rem = fetch(train_fut[1])
     for (p1,p2) in zip(θ, θ_rem)
         copy!(p1, p2)
     end
+end
+
+
+function do_eval_on_remote(model, data_dl;
+                           status_chan=nothing, get_step=nothing,
+                           device=gpu)
+    y=[]
+    while true
+        try
+            global x = take!(data_dl)
+        catch err
+            if isa(err, RemoteException) &
+                isa(err.captured.ex, InvalidStateException) &
+                (err.captured.ex.state == :closed)
+                break
+            end
+            if isa(err, InvalidStateException) & (err.state == :closed)
+                break
+            end
+        end
+        push!(y,model(x))
+    end
+    return y
+end
+
+"""
+    eval_model(saved_model_dir::String, model, _data, workers;
+               status_chan=nothing, get_step=nothing,
+               device=gpu)
+
+  Not tested yet. Still need to build model saving in `train!`
+"""
+function eval_model(saved_model_dir::String, model, _data, workers;
+                    status_chan=nothing, get_step=nothing,
+                    device=gpu)
+    save_model_f = open(joinpath(saved_model_dir, "savedModelParam.jlb"), "r")
+    open(save_mdel_f) do f
+        while true
+            try
+                global (step, _θ) = deserialize(f)
+            catch e
+                if isa(e, EOFError)
+                    break
+                end
+            end
+            if step == get_step
+                break
+            end
+        end
+    end
+    θ = Flux.params(model)
+    for (ld, ls) in zip(θ, _θ)
+        copy!(ld, ls)
+    end
+    res = eval_model(model, _data, workers; status_chan=status_chan, get_step=get_step,device=device)
+    return res
+end
+
+"""
+    eval_model(model, data, evalWorkers;
+               status_chan=nothing, get_step=nothing,
+               device=gpu)
+
+  This function evaluates the model on a set of data partitioned across many workers. `eval_model` will deploy `model` and the approprate `RemoteChannel` from `data` to `evalWorkers`. There, it will call `model(x)` on the data iterated by `data[myid()]`. Finally, the results will be fetched and aggregated into a single array.
+
+# Arguments
+- `model::Chain`: The model that will be evaluated
+- `data::Dict{Int,RemoteChannel}`: The dict key is the worker id that the remote channel will be sent to
+- `evalWorkers::AbstractArray`: List of workers ids to perform evaluation on.
+- `statusChan::RemoteChannel`: status messages and data will be placed on this channel to monitor progress
+- `device::Function`: the device a model will be copied to on remote worker. usually `gpu` or `cpu`
+
+# Returns
+- `Array`: concatenated array of results from each of the workers
+
+# Throws
+- `nothing`
+"""
+function eval_model(_model, _data, evalWorkers; status_chan=nothing, device=gpu)
+
+    model_fut = [@spawnat w global model = _model |> device for w in evalWorkers];
+    wait.(model_fut)
+
+    eval_fut = []
+    for w in evalWorkers
+        fut = @spawnat w DistributedFluxML.do_eval_on_remote(model, _data[w]; status_chan=status_chan)
+        push!(eval_fut, fut)
+    end
+    wait.(eval_fut)
+    res = vcat(fetch.(eval_fut)...)
+    return res
 end
 
 end # module

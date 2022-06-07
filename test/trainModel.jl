@@ -1,33 +1,6 @@
 @testset "train model" begin
-
-    mockData_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2]...,"mockData")
-    _shard_file_list = ["iris_df_1.jlb",
-                        "iris_df_2.jlb",
-                        "iris_df_3.jlb"]
-
     batch_size=8
     epochs = 50
-
-    shard_file_list = [joinpath(mockData_path, sf) for sf in _shard_file_list];
-
-    deser_fut = [@spawnat w global rawData = deserialize(f)
-                 for (w, f) in zip(p, shard_file_list)]
-    for fut in deser_fut
-        wait(fut)
-    end
-    epoch_length_worker = @fetchfrom p[1] nrow(rawData)
-    @everywhere p labels = ["Iris-versicolor", "Iris-virginica", "Iris-setosa"]
-
-    @everywhere p x_array =
-        Array(rawData[:,
-                      [:sepal_l, :sepal_w,
-                       :petal_l, :petal_w
-                       ]])
-
-    @everywhere p y_array =
-        Flux.onehotbatch(rawData[:,"class"],
-                         labels)
-
     @everywhere p dataChan = Channel(1) do ch
         n_chunk = ceil(Int,size(x_array)[1]/$batch_size)
         x_dat = Flux.chunk(transpose(x_array), n_chunk)
