@@ -313,17 +313,17 @@ end
                status_chan=nothing, get_step=nothing,
                device=gpu)
 
-  This function evaluates the model on a set of data partition accros many workers. `eval_model` will deploy `model` and the approprate `RemoteChannel` from `data` to `evalWorkers`. There, it will call `model(x)` on the data iterated by `data[myid()]`. Finally, the results will be fetch and agrigated into a single array.
+  This function evaluates the model on a set of data partitioned across many workers. `eval_model` will deploy `model` and the approprate `RemoteChannel` from `data` to `evalWorkers`. There, it will call `model(x)` on the data iterated by `data[myid()]`. Finally, the results will be fetched and aggregated into a single array.
 
 # Arguments
-- `model::Chain`: The model to that will be evaluated
+- `model::Chain`: The model that will be evaluated
 - `data::Dict{Int,RemoteChannel}`: The dict key is the worker id that the remote channel will be sent to
 - `evalWorkers::AbstractArray`: List of workers ids to perform evaluation on.
 - `statusChan::RemoteChannel`: status messages and data will be placed on this channel to monitor progress
 - `device::Function`: the device a model will be copied to on remote worker. usually `gpu` or `cpu`
 
 # Returns
-- `Array`: concatinated array of results from each of the workers
+- `Array`: concatenated array of results from each of the workers
 
 # Throws
 - `nothing`
