@@ -64,7 +64,7 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                             saved_model_dir=nothing,
                             master=myid(),
                             cb=()->nothing,
-                            device=cpu,
+                            device=gpu,
                             size_data_load_buff=2,
                             save_on_step_cb=st -> true)
 
@@ -259,6 +259,7 @@ function train!(_loss_f, _model::Chain, _data,
         fut = @spawnat w do_train_on_remote(loss_f, model, _data[w], opt; status_chan=status_chan,
                                             saved_model_dir=saved_model_dir,
                                             master=trainWorkers[1],
+                                            device=device,
                                             save_on_step_cb=st -> true)
         push!(train_fut, fut)
     end
