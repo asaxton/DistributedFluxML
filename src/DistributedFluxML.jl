@@ -64,6 +64,8 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                             saved_model_dir=nothing,
                             master=myid(),
                             cb=()->nothing,
+                            device=cpu,
+                            size_data_load_buff=2,
                             save_on_step_cb=st -> true)
 
     if (master == myid()) & (saved_model_dir != nothing)
@@ -84,13 +86,33 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
     #    global data_dl = data
     #end
     # See docstring in build_data_loader_from_RemoteChannel
-    data_dl = data
+    data_dl = Channel(size_data_load_buff) do ch
+        while true
+            t_dat = take!(data)
+            if typeof(t_dat) == Symbol
+                if t_dat == :End
+                    put!(ch, t_dat)
+                    break
+                end
+            end
+            gpu_data  = t_dat |> device
+            put!(ch, gpu_data)
+        end
+    end
 
     loss_rep = Float32(0.0)
     step = 0
 
-    while isready(data_dl)
+    while true
         xy = take!(data_dl)
+        if typeof(xy) == Symbol
+            if xy == :End
+                cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
+                                                    :step=>step))
+                break
+            end
+        end
+
         step += 1
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step";
                                            :step=>step,
@@ -130,8 +152,6 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
         end
 
     end
-    cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
-                                           :step=>step))
     return θ
 end
 
