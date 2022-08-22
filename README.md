@@ -12,7 +12,7 @@ These examples assumes that you have already partitioned the data into multiple 
     p = addProc(3)
 
     @everywhere using DistributedFluxML
-
+    status_chan = RemoteChannel(()->Channel{Dict{Symbol, Any}}(10000), myid())
 
     batch_size=8
     epochs = 50
@@ -58,7 +58,6 @@ These examples assumes that you have already partitioned the data into multiple 
 
     model = Chain(Dense(4,8),Dense(8,16), Dense(16,3))
 
-    empty!(status_array)
     DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p; status_chan)
 ```
 

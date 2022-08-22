@@ -61,6 +61,7 @@ end
     using CSV
     using Serialization
 end
+#status_chan = RemoteChannel(()->Channel{Dict{Symbol, Any}}(10000), myid())
 status_chan = RemoteChannel(()->Channel{Any}(10000), myid())
 
 status_array = []

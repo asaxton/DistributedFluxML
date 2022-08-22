@@ -222,7 +222,9 @@ function train!(_loss_f, _model::Chain, _data,
                 _opt::AbstractOptimiser, trainWorkers;
                 cb=()->nothing,
                 save_on_step_cb=st -> true,
-                status_chan=nothing,
+                status_chan::Union{RemoteChannel{Channel{Dict{Symbol, Any}}},
+                                   Channel{Dict{Symbol, Any}},
+                                   Nothing}=nothing,
                 saved_model_dir=nothing,
                 device=gpu)
 
