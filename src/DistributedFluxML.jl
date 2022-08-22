@@ -104,55 +104,65 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
     step = 0
 
     while true
-        xy = take!(data_dl)
-        if typeof(xy) == Symbol
-            if xy == :End
-                cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
+    	try
+            xy = take!(data_dl)
+            if typeof(xy) == Symbol
+                if xy == :End
+                    cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
+                                                        :step=>step))
+                    break
+                end
+            end
+
+            step += 1
+            cond_put!(status_chan, makeStatDict("do_train_on_remote.step";
+                                               :step=>step,
+                                               :xSize=>size(xy[1]),
+                                                :ySize=>size(xy[2])))
+
+            #loss_fac_cpu = Float32(230400)
+            xys = size(xy[2])
+            loss_fac_cpu = Float32(xys[1]*xys[2]*xys[3]*xys[4])
+            loss_fac_gpu = loss_fac_cpu |> gpu
+
+            gr = Flux.gradient(θ) do
+                #l = loss(xy...)
+                l = loss(xy...)/loss_fac_gpu
+                loss_rep = l |> f32
+                return l
+            end
+
+            cond_put!(status_chan, makeStatDict("do_train_on_remote.step.grad";
+                                               :step=>step,
+                                               :loss=>loss_rep))
+     
+            for (sh, acumm_sh, p) in  zip(gr_share, acum_gr_share, gr.params)
+                if gr.grads[p] != nothing
+                    copyto!(sh, gr.grads[p])
+                    _ret_sh = OptOutAllReduce.allReduce(+, sh)
+                    copyto!(gr.grads[p], _ret_sh[1]/_ret_sh[2])
+                end
+            end
+            cond_put!(status_chan, makeStatDict("do_train_on_remote.step.shared";
+                                               :step=>step))
+
+            Flux.Optimise.update!(opt, θ, gr)
+
+            cb()
+
+            if (master == myid()) & (saved_model_dir != nothing) & save_on_step_cb(step)
+                serialize(save_model_f, (step, θ))
+                flush(save_model_f)
+                cond_put!(status_chan, makeStatDict("do_train_on_remote.step.saved_model";
                                                     :step=>step))
-                break
             end
-        end
-
-        step += 1
-        cond_put!(status_chan, makeStatDict("do_train_on_remote.step";
-                                           :step=>step,
-                                           :xSize=>size(xy[1]),
-                                            :ySize=>size(xy[2])))
-
-        gr = Flux.gradient(θ) do
-            l = loss(xy...)
-            loss_rep = l |> f32
-            return l
-        end
-
-        cond_put!(status_chan, makeStatDict("do_train_on_remote.step.grad";
-                                           :step=>step,
-                                           :loss=>loss_rep))
-        if true         
-        for (sh, acumm_sh, p) in  zip(gr_share, acum_gr_share, gr.params)
-            if gr.grads[p] != nothing
-                copy!(sh, gr.grads[p])
-                _ret_sh = OptOutAllReduce.allReduce(+, sh)
-                copy!(gr.grads[p], _ret_sh[1]/_ret_sh[2])
-            end
-        end
-
-        cond_put!(status_chan, makeStatDict("do_train_on_remote.step.shared";
-                                           :step=>step))
-        end
-        Flux.Optimise.update!(opt, θ, gr)
-
-        cb()
-
-        if (master == myid()) & (saved_model_dir != nothing) & save_on_step_cb(step)
-            serialize(save_model_f, (step, θ))
-            flush(save_model_f)
-            cond_put!(status_chan, makeStatDict("do_train_on_remote.step.saved_model";
-                                                :step=>step))
-        end
-
+    	catch e
+    	    @warn "Failure on $(gethostname()) : $(myid()) at step $(step)"
+    	    @warn "" exception=(e, catch_backtrace()) # Write stacktrace to julia log
+    	    cond_put!(status_chan, makeStatDict("do_train_on_remote.error";:error=>e))
+    	end 
     end
-    return θ
+    return [p |> cpu for p in θ]
 end
 
 
