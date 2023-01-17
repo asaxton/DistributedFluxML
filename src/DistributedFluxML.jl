@@ -1,7 +1,7 @@
 module DistributedFluxML
 
 using Distributed
-using LinearAlgebra
+#using LinearAlgebra
 using Flux.Optimise: AbstractOptimiser
 using Flux
 using Zygote
@@ -283,13 +283,13 @@ function train!(_loss_f, _model::Chain, _data,
         push!(train_fut, fut)
     end
 
-    #wait.(train_fut)
+    wait.(train_fut)
 
-    #θ = Flux.params(_model)
-    #θ_rem = fetch(train_fut[1])
-    #for (p1,p2) in zip(θ, θ_rem)
-    #    copy!(p1, p2)
-    #end
+    θ = Flux.params(_model)
+    θ_rem = fetch(train_fut[1])
+    for (p1,p2) in zip(θ, θ_rem)
+        copy!(p1, p2)
+    end
     return train_fut
 end
 
