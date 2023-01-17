@@ -1,7 +1,6 @@
 module DistributedFluxML
 
 using Distributed
-#using LinearAlgebra
 using Flux.Optimise: AbstractOptimiser
 using Flux
 using Zygote
