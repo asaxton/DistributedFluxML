@@ -3,7 +3,6 @@ using Test
 using Distributed
 using ClusterManagers
 using Pkg
-using Serialization
 using Flux
 using Zygote
 using Statistics
@@ -59,7 +58,6 @@ end
     using Zygote
     using DataFrames
     using CSV
-    using Serialization
 end
 status_chan = RemoteChannel(()->Channel{Any}(10000), myid())
 
@@ -82,13 +80,17 @@ _shard_file_list = ["iris_df_1.jlb",
                     "iris_df_2.jlb",
                     "iris_df_3.jlb"]
 
-shard_file_list = [joinpath(mockData_path, sf) for sf in _shard_file_list];
+headers = [:sepal_l, :sepal_w, :petal_l, :petal_w, :class]
+__totData = CSV.read("../mockData/iris.data", DataFrame, header=headers)
+_totData = [__totData[1:50, :],
+            __totData[51:100, :],
+            __totData[101:end, :]
+            ]
 
-deser_fut = [@spawnat w global rawData = deserialize(f)
-             for (w, f) in zip(p, shard_file_list)]
-for fut in deser_fut
-    wait(fut)
-end
+totData = Dict(i=>v for (i,v) in zip(p, _totData))
+
+@everywhere p rawData = $(totData)[myid()]
+
 epoch_length_worker = @fetchfrom p[1] nrow(rawData)
 @everywhere p labels = ["Iris-versicolor", "Iris-virginica", "Iris-setosa"]
 
@@ -99,7 +101,7 @@ epoch_length_worker = @fetchfrom p[1] nrow(rawData)
                    ]])
 
 @everywhere p y_array =
-    Flux.onehotbatch(rawData[:,"class"],
+    Flux.onehotbatch(rawData[:,:class],
                      labels)
 
 
