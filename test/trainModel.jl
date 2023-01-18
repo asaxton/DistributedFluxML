@@ -21,7 +21,7 @@
     datRemChansDict = Dict(k => @fetchfrom w datRemChan for (k,w) in zip(p, trainWorkers_shift))
     
     loss_f = Flux.Losses.logitcrossentropy
-    opt = Flux.Optimise.Adam(0.001)
+    opt = Flux.Optimise.ADAM(0.001)
 
     model = Chain(Dense(4,8),Dense(8,16), Dense(16,3))
 
