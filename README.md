@@ -44,6 +44,7 @@ These examples assumes that you have already partitioned the data into multiple 
                 put!(ch, d)
             end
         end
+	put!(ch, :End)
     end
 
     @everywhere p datRemChan = RemoteChannel(() -> dataChan, myid())

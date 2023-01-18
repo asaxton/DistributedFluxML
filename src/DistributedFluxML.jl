@@ -1,7 +1,6 @@
 module DistributedFluxML
 
 using Distributed
-using LinearAlgebra
 using Flux.Optimise: AbstractOptimiser
 using Flux
 using Zygote
@@ -64,11 +63,14 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                             saved_model_dir=nothing,
                             master=myid(),
                             cb=()->nothing,
+                            device=gpu,
+                            size_data_load_buff=2,
                             save_on_step_cb=st -> true)
 
     if (master == myid()) & (saved_model_dir != nothing)
         global save_model_f = open(joinpath(saved_model_dir, "savedModelParam.jlb"), "w")
     end
+
     loss(x,y) = loss_f(model(x), y; agg=sum)
     θ = Flux.params(model)
     gr_share = [zeros(Float32, size(l)) for l in θ]
@@ -84,40 +86,65 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
     #    global data_dl = data
     #end
     # See docstring in build_data_loader_from_RemoteChannel
-    data_dl = data
+    data_dl = Channel(size_data_load_buff) do ch
+        while true
+            t_dat = take!(data)
+            if typeof(t_dat) == Symbol
+                if t_dat == :End
+                    put!(ch, t_dat)
+                    break
+                end
+            end
+            gpu_data  = (t_dat[1] |> device, t_dat[2] |> device)
+            put!(ch, gpu_data)
+        end
+    end
 
     loss_rep = Float32(0.0)
     step = 0
 
-    while isready(data_dl)
+    while true
         xy = take!(data_dl)
+        if typeof(xy) == Symbol
+            if xy == :End
+                cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
+                                                    :step=>step))
+                break
+            end
+        end
+        (x, y) = xy
         step += 1
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step";
-                                           :step=>step,
-                                           :xSize=>size(xy[1]),
+                                            :step=>step,
+                                            :xSize=>size(xy[1]),
                                             :ySize=>size(xy[2])))
 
+        #loss_fac_cpu = Float32(230400)
+        xs = size(x)
+        loss_fac_cpu = Float32(reduce(*, xs))
+        loss_fac_gpu = loss_fac_cpu |> gpu
+
         gr = Flux.gradient(θ) do
-            l = loss(xy...)
+            #l = loss(xy...)
+            l = loss(x, y)/loss_fac_gpu
             loss_rep = l |> f32
             return l
         end
 
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step.grad";
-                                           :step=>step,
-                                           :loss=>loss_rep))
-        if true         
+                                            :step=>step,
+                                            :loss=>loss_rep))
+
         for (sh, acumm_sh, p) in  zip(gr_share, acum_gr_share, gr.params)
             if gr.grads[p] != nothing
-                copy!(sh, gr.grads[p])
+                copyto!(sh, gr.grads[p])
                 _ret_sh = OptOutAllReduce.allReduce(+, sh)
-                copy!(gr.grads[p], _ret_sh[1]/_ret_sh[2])
+                copyto!(gr.grads[p], _ret_sh[1]/_ret_sh[2])
             end
         end
-
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step.shared";
-                                           :step=>step))
-        end
+                                            :step=>step))
+
         Flux.Optimise.update!(opt, θ, gr)
 
         cb()
@@ -128,11 +155,21 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
             cond_put!(status_chan, makeStatDict("do_train_on_remote.step.saved_model";
                                                 :step=>step))
         end
-
     end
-    cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
-                                           :step=>step))
-    return θ
+
+    cond_put!(status_chan, makeStatDict("do_train_on_remote.finished.wait";
+                                        :step=>step))
+    _ret_sh = OptOutAllReduce.allReduce(+, :Skip)
+
+    while true
+        if _ret_sh[2] ==0
+            break
+        end
+        _ret_sh = OptOutAllReduce.allReduce(+, :Skip)
+    end
+    cond_put!(status_chan, makeStatDict("do_train_on_remote.finished.done";
+                                        :step=>step))
+    return [p |> cpu for p in θ]
 end
 
 
@@ -224,7 +261,8 @@ function train!(_loss_f, _model::Chain, _data,
                 save_on_step_cb=st -> true,
                 status_chan=nothing,
                 saved_model_dir=nothing,
-                device=gpu)
+                device=gpu,
+                no_block=false)
 
     OptOutAllReduce.init(trainWorkers)
     
@@ -239,6 +277,7 @@ function train!(_loss_f, _model::Chain, _data,
         fut = @spawnat w do_train_on_remote(loss_f, model, _data[w], opt; status_chan=status_chan,
                                             saved_model_dir=saved_model_dir,
                                             master=trainWorkers[1],
+                                            device=device,
                                             save_on_step_cb=st -> true)
         push!(train_fut, fut)
     end
@@ -250,27 +289,27 @@ function train!(_loss_f, _model::Chain, _data,
     for (p1,p2) in zip(θ, θ_rem)
         copy!(p1, p2)
     end
+    return train_fut
 end
 
 
 function do_eval_on_remote(model, data_dl;
                            status_chan=nothing, get_step=nothing,
                            device=gpu)
+    cond_put!(status_chan, makeStatDict("do_eval_on_remote.start";
+                                        :message=>"Starting",
+                                        ))
     y=[]
     while true
-        try
-            global x = take!(data_dl)
-        catch err
-            if isa(err, RemoteException) &
-                isa(err.captured.ex, InvalidStateException) &
-                (err.captured.ex.state == :closed)
-                break
-            end
-            if isa(err, InvalidStateException) & (err.state == :closed)
+        x = take!(data_dl) 
+        if typeof(x) == Symbol
+            if x == :End
                 break
             end
         end
-        push!(y,model(x))
+        x_device = x |> device
+        y_cpu = model(x_device) |> cpu
+        push!(y,y_cpu)
     end
     return y
 end

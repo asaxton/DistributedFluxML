@@ -10,6 +10,7 @@
                 put!(ch, d)
             end
         end
+        put!(ch, :End)
     end
 
     @everywhere p datRemChan = RemoteChannel(() -> dataChan, myid())
@@ -40,7 +41,8 @@
 
     global log_loss_dict = Dict(w => [(s[:step], log(s[:loss]))
                                       for s in status_array
-                                      if s[:statusName] == "do_train_on_remote.step.grad" && s[:myid] == w]
+                                      if s[:statusName] ==
+                                      "do_train_on_remote.step.grad" && s[:myid] == w]
                                 for w in p)
     raw_data= vcat(values(log_loss_dict)...)
     raw_data_trunk = [l for l in raw_data if l[1] > epoch_length_worker*1]

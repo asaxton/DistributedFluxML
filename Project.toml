@@ -7,18 +7,16 @@ version = "0.1.0"
 ClusterManagers = "34f1f09b-3a8b-5176-ab39-66d58a4d544e"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extras]
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 
 [targets]
 test = ["Test", "Statistics", "GLM", "Random", "DataFrames", "CSV"]

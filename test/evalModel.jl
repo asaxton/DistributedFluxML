@@ -8,7 +8,7 @@
         for d in x_dat
             put!(ch, d)
         end
-        
+        put!(ch, :End)
     end
 
     @everywhere p evalDatRemChan = RemoteChannel(() -> evalDataChan, myid())
@@ -32,11 +32,11 @@
 
     evalLosses = [loss_f(r,_y) for (r, _y) in zip(res, y)]
     n_steps_in_batch = length(evalLosses)
-    last_step = maximum([s[:step] for s in status_array
-                         if (s[:statusName] == "do_train_on_remote.step.grad")])
-    trainLosses = [s[:loss] for s in status_array
-                   if (s[:statusName] == "do_train_on_remote.step.grad") &
-                   (s[:step] > (last_step - n_steps_in_batch))]
+    _dtor_status_array = [s for s in status_array
+                         if (s[:statusName] == "do_train_on_remote.step.grad")]
+    last_step = maximum([s[:step] for s in _dtor_status_array])
+    trainLosses = [s[:loss] for s in _dtor_status_array
+                       if (s[:step] > (last_step - n_steps_in_batch))]
 
     @test mean(evalLosses) < mean(trainLosses) + sqrt(r2(ols))*3 # test that eval_model used the model that we passed
 
