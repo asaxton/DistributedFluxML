@@ -63,6 +63,17 @@ These examples assumes that you have already partitioned the data into multiple 
     DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p; status_chan)
 ```
 
+### Custom Gradiant Calc
+
+Argument `grad_calc` in `train!` is meant for novel nomalization schemes. For example, if your `DataChannel` returns a 3 touple, say `(x, s, y)`, a desired grad calc coule be
+
+```
+function node_norm_grad_calc(xsy, loss_f, model; device=gpu)
+    x,s,y = xsy
+    loss_f(model(x), y, agg=sum)/s
+end
+```
+
 
 ### Opt Out All Reduce
 ```
