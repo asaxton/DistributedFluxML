@@ -4,6 +4,7 @@ using Distributed
 using Flux.Optimise: AbstractOptimiser
 using Flux
 using Zygote
+using Zygote: @nograd
 
 function cond_put!(chan, dat)
     if chan != nothing
@@ -17,6 +18,7 @@ function makeStatDict(status_name::String; kwargs...)
     Dict(:statusName=>status_name,
          :myid=>myid(),
          :hostname=>gethostname(),
+         :timestamp=>time(),
          kwargs...)
 end
 
@@ -53,11 +55,39 @@ function build_data_loader_from_RemoteChannel(rChan)
     end
 end
 
+"""
+
+    std_grad_calc(xy, loss_f, model; device)
+
+  Standard combination on loss_f, model, input and output to be used in
+
+```
+  l = Flux.gradient(θ) do
+    ...
+  end
+```
+
+# Arguments
+- `xy::Tuple`: A tuple with the first item as the model input and second item the expected model output
+- `loss_f::Function`: evauates `loss_f(y̅, y)`
+- `model::Chain`: The model to be trained
+
+
+# Returns
+- `Float`: the value of the loss calculated by loss_f
+"""
+function std_grad_calc(xy, loss_f, model; device=gpu)
+    x, y = xy
+    xs = size(x)
+    loss_fac_cpu = Float32(reduce(*, xs))
+    loss_fac_gpu = loss_fac_cpu |> device
+    loss_f(model(x), y, agg=sum)/loss_fac_gpu
+end
 
 """
     do_train_on_remote()
 
-
+Not documented. Called though @swpanat in `train!()`. No one whould be calling this directly.
 """
 function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                             saved_model_dir=nothing,
@@ -65,13 +95,13 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                             cb=()->nothing,
                             device=gpu,
                             size_data_load_buff=2,
-                            save_on_step_cb=st -> true)
+                            save_on_step_cb=st -> true,
+                            grad_calc=std_grad_calc)
 
     if (master == myid()) & (saved_model_dir != nothing)
         global save_model_f = open(joinpath(saved_model_dir, "savedModelParam.jlb"), "w")
     end
 
-    loss(x,y) = loss_f(model(x), y; agg=sum)
     θ = Flux.params(model)
     gr_share = [zeros(Float32, size(l)) for l in θ]
     acum_gr_share = copy(gr_share)
@@ -86,7 +116,7 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
     #    global data_dl = data
     #end
     # See docstring in build_data_loader_from_RemoteChannel
-    data_dl = Channel(size_data_load_buff) do ch
+    data_dl = Channel(size_data_load_buff, spawn=true) do ch
         while true
             t_dat = take!(data)
             if typeof(t_dat) == Symbol
@@ -95,7 +125,8 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                     break
                 end
             end
-            gpu_data  = (t_dat[1] |> device, t_dat[2] |> device)
+            gpu_data  = (_d |> device for _d in t_dat)
+
             put!(ch, gpu_data)
         end
     end
@@ -105,6 +136,7 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
 
     while true
         xy = take!(data_dl)
+        Flux.CUDA.synchronize()
         if typeof(xy) == Symbol
             if xy == :End
                 cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
@@ -112,28 +144,25 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
                 break
             end
         end
-        (x, y) = xy
         step += 1
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step";
-                                            :step=>step,
-                                            :xSize=>size(xy[1]),
-                                            :ySize=>size(xy[2])))
+                                            :step=>step))
 
         #loss_fac_cpu = Float32(230400)
-        xs = size(x)
-        loss_fac_cpu = Float32(reduce(*, xs))
-        loss_fac_gpu = loss_fac_cpu |> gpu
 
         gr = Flux.gradient(θ) do
             #l = loss(xy...)
-            l = loss(x, y)/loss_fac_gpu
+            #l = loss_f(model(x), y; agg=sum)/loss_fac_gpu
+            #l = loss(x, y)/loss_fac_gpu
+            l = grad_calc(xy, loss_f, model; device=device)
             loss_rep = l |> f32
             return l
         end
 
         cond_put!(status_chan, makeStatDict("do_train_on_remote.step.grad";
                                             :step=>step,
-                                            :loss=>loss_rep))
+                                            :loss=>loss_rep,
+                                            :ImNew=>3))
 
         for (sh, acumm_sh, p) in  zip(gr_share, acum_gr_share, gr.params)
             if gr.grads[p] != nothing
@@ -177,7 +206,8 @@ unit_test_example_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2].
 """
 
     train!(loss, model, data, opt, workers;
-           cb, save_on_step_cb, status_chan, save_model_dir, device)
+           cb, save_on_step_cb, status_chan, save_model_dir, device,
+           no_block, grad_calc=std_grad_calc)
 
   Uses a `loss` function and training `data` to improve the `model` parameters according to a particular optimisation rule `opt`. Runs the training loop in parellel on `workers`, agrigates the gradients through an **allReduce**, then updates the model parameters.
 
@@ -236,10 +266,20 @@ Once the data is set up for your needs, then you need to define the model, loss,
     DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p)
 ```
 
+# Example
+Argument `grad_calc` is meant for novel nomalization schemes. For example, if your `DataChannel` returns a 3 touple, say `(x, s, y)`, a desired grad calc coule be
+
+```
+function node_norm_grad_calc(xsy, loss_f, model; device=gpu)
+    x,s,y = xsy
+    loss_f(model(x), y, agg=sum)/s
+end
+```
+
 When `train!` returns, it will have updated the parameters of `model`.
 
 # Arguments
-- `loss::Function`: takes an item in data, `d`, and evauates `loss(d)`
+- `loss::Function`: evauates `loss(y, y̅)`
 - `model::Chain`: The model to be trained
 - `data::Dict{Int,RemoteChannel}`: The dict key is the worker id that the remote channel will be sent to
 - `opt::AbstractOptimizer`: The optimized used during training
@@ -248,6 +288,7 @@ When `train!` returns, it will have updated the parameters of `model`.
 - `save_on_step_cb::Function`: The training step is passed to this cb on each training iteration. If the cb returns true, a copy of the model will be saved to `saved_model_dir`
 - `saved_model_dir::String`: path to directory where saved model will be placed
 - `device::Function`: the device a model will be copied to on remote worker. usually `gpu` or `cpu`
+- `grad_calc::Function`: a function that will be called in Flux.gradient to combine a single data sample, the model, and the loss function. See `std_grad_calc` as an example.
 
 # Returns
 - `nothing`
@@ -262,7 +303,7 @@ function train!(_loss_f, _model::Chain, _data,
                 status_chan=nothing,
                 saved_model_dir=nothing,
                 device=gpu,
-                no_block=false)
+                grad_calc=std_grad_calc)
 
     OptOutAllReduce.init(trainWorkers)
     
@@ -278,7 +319,8 @@ function train!(_loss_f, _model::Chain, _data,
                                             saved_model_dir=saved_model_dir,
                                             master=trainWorkers[1],
                                             device=device,
-                                            save_on_step_cb=st -> true)
+                                            save_on_step_cb=st -> true,
+                                            grad_calc=grad_calc)
         push!(train_fut, fut)
     end
 
