@@ -136,7 +136,6 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
 
     while true
         xy = take!(data_dl)
-        Flux.CUDA.synchronize()
         if typeof(xy) == Symbol
             if xy == :End
                 cond_put!(status_chan, makeStatDict("do_train_on_remote.finished";
