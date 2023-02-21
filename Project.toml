@@ -20,3 +20,9 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test", "Statistics", "GLM", "Random", "DataFrames", "CSV"]
+
+[compat]
+julia = "1.7"
+ClusterManagers = "0.4.3"
+Flux = "0.12.10"
+Zygote = "0.6.55"
