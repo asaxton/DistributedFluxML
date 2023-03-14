@@ -51,7 +51,7 @@ end
 
 @everywhere begin
     using GLM
-    using DistributedFluxML
+    using DistributedJLFluxML
     using Flux
     using DataFrames
     using CSV
@@ -72,13 +72,13 @@ end
 
 ## Load Mock data
 
-mockData_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2]...,"mockData")
-_shard_file_list = ["iris_df_1.jlb",
-                    "iris_df_2.jlb",
-                    "iris_df_3.jlb"]
+mockData_path = joinpath(
+    splitpath(pathof(DistributedJLFluxML))[1:end-2]...,
+    "mockData", "iris.data"
+)
 
 headers = [:sepal_l, :sepal_w, :petal_l, :petal_w, :class]
-__totData = CSV.read("../mockData/iris.data", DataFrame, header=headers)
+__totData = CSV.read(mockData_path, DataFrame, header=headers)
 _totData = [__totData[1:50, :],
             __totData[51:100, :],
             __totData[101:end, :]

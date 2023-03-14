@@ -1,4 +1,4 @@
-module DistributedFluxML
+module DistributedJLFluxML
 
 using Distributed
 using Flux.Optimise: AbstractOptimiser
@@ -200,7 +200,7 @@ function do_train_on_remote(loss_f, model, data, opt; status_chan=nothing,
 end
 
 
-unit_test_example_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2]...,"test")
+unit_test_example_path = joinpath(splitpath(pathof(DistributedJLFluxML))[1:end-2]...,"test")
 """
 
     train!(loss, model, data, opt, workers;
@@ -261,7 +261,7 @@ Once the data is set up for your needs, then you need to define the model, loss,
 
     model = Chain(Dense(4,8),Dense(8,16), Dense(16,3))
 
-    DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p)
+    DistributedJLFluxML.train!(loss_f, model, datRemChansDict, opt, p)
 ```
 
 # Example
@@ -414,7 +414,7 @@ function eval_model(_model, _data, evalWorkers; status_chan=nothing, device=gpu)
 
     eval_fut = []
     for w in evalWorkers
-        fut = @spawnat w DistributedFluxML.do_eval_on_remote(model, _data[w]; status_chan=status_chan)
+        fut = @spawnat w DistributedJLFluxML.do_eval_on_remote(model, _data[w]; status_chan=status_chan)
         push!(eval_fut, fut)
     end
     wait.(eval_fut)

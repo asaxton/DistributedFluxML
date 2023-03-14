@@ -13,7 +13,7 @@
 
     @everywhere p evalDatRemChan = RemoteChannel(() -> evalDataChan, myid())
 
-    test_path = joinpath(splitpath(pathof(DistributedFluxML))[1:end-2]...,
+    test_path = joinpath(splitpath(pathof(DistributedJLFluxML))[1:end-2]...,
                          "test")
 
     trainWorkers_shift = circshift(p, 1)
@@ -22,9 +22,9 @@
     datRemChansDict = Dict(k => @fetchfrom w evalDatRemChan
                            for (k,w) in zip(p, trainWorkers_shift))
 
-    model = @fetchfrom p[1] DistributedFluxML.model
+    model = @fetchfrom p[1] DistributedJLFluxML.model
 
-    global res = DistributedFluxML.eval_model(model, datRemChansDict, p; status_chan)
+    global res = DistributedJLFluxML.eval_model(model, datRemChansDict, p; status_chan)
 
     y = vcat([@fetchfrom w Flux.chunk(y_array, ceil(Int,size(y_array)[2]/batch_size)) for w in trainWorkers_shift]...)
 

@@ -1,12 +1,12 @@
 @testset "Opt Out All Reduce" begin
-    DistributedFluxML.OptOutAllReduce.init(p)
+    DistributedJLFluxML.OptOutAllReduce.init(p)
 
-    @test all([@fetchfrom w DistributedFluxML.OptOutAllReduce.finished_init for w in p])
-    right_ids = Set([@fetchfrom w DistributedFluxML.OptOutAllReduce.right_id for w in p])
+    @test all([@fetchfrom w DistributedJLFluxML.OptOutAllReduce.finished_init for w in p])
+    right_ids = Set([@fetchfrom w DistributedJLFluxML.OptOutAllReduce.right_id for w in p])
     @test right_ids == Set(p)
 
     test_vals = [1,2,3]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)
@@ -18,7 +18,7 @@
     end
 
     test_vals = [1,:Skip,3]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)
@@ -30,7 +30,7 @@
     end
 
     test_vals = [1,:Skip,:Skip]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)
@@ -42,7 +42,7 @@
     end
 
     test_vals = [:Skip, :Skip,3]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)
@@ -54,7 +54,7 @@
     end
 
     test_vals = [:Skip,2,:Skip]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)
@@ -66,7 +66,7 @@
     end
 
     test_vals = [:Skip,:Skip,:Skip]
-    allR_fut = [@spawnat w DistributedFluxML.OptOutAllReduce.allReduce(+, v)
+    allR_fut = [@spawnat w DistributedJLFluxML.OptOutAllReduce.allReduce(+, v)
                 for (v,w) in zip(test_vals,p)]
     if !all([isready(fut) for fut in allR_fut])
         sleep(2)

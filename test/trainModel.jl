@@ -26,13 +26,13 @@
     model = Chain(Dense(4,8),Dense(8,16), Dense(16,3))
 
     empty!(status_array)
-    DistributedFluxML.train!(loss_f, model, datRemChansDict, opt, p; status_chan)
+    DistributedJLFluxML.train!(loss_f, model, datRemChansDict, opt, p; status_chan)
 
     finished_workers = Set([s[:myid] for s in status_array if s[:statusName] == "do_train_on_remote.finished"])
     test_finshed_res = @test finished_workers == Set(p)
 
     if isa(test_finshed_res, Test.Pass)
-        remote_params = [@fetchfrom w Flux.params(DistributedFluxML.model) for w in p]
+        remote_params = [@fetchfrom w Flux.params(DistributedJLFluxML.model) for w in p]
         θ = Flux.params(model)
         @test all(θ .≈ remote_params[1])
         @test all(θ .≈ remote_params[2])
