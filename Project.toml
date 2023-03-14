@@ -8,7 +8,6 @@ ClusterManagers = "34f1f09b-3a8b-5176-ab39-66d58a4d544e"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extras]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -22,7 +21,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test", "Statistics", "GLM", "Random", "DataFrames", "CSV"]
 
 [compat]
-julia = "1.7"
+julia = "1.8"
 ClusterManagers = "0.4.3"
-Flux = "0.12.10"
-Zygote = "0.6.55"
+Flux = "0.13"

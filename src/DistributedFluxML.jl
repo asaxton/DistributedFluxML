@@ -3,8 +3,7 @@ module DistributedFluxML
 using Distributed
 using Flux.Optimise: AbstractOptimiser
 using Flux
-using Zygote
-using Zygote: @nograd
+# using Zygote: @nograd # has been useful in the past, keeping it here incase.
 
 function cond_put!(chan, dat)
     if chan != nothing

@@ -21,7 +21,7 @@
     datRemChansDict = Dict(k => @fetchfrom w datRemChan for (k,w) in zip(p, trainWorkers_shift))
     
     loss_f = Flux.Losses.logitcrossentropy
-    opt = Flux.Optimise.ADAM(0.001)
+    opt = Flux.Optimise.Adam(0.001)
 
     model = Chain(Dense(4,8),Dense(8,16), Dense(16,3))
 
@@ -48,6 +48,7 @@
     raw_data_trunk = [l for l in raw_data if l[1] > epoch_length_worker*1]
     data = DataFrame(raw_data_trunk)
     rename!(data, [:Step, :LLoss])
+    data[!,:LLoss] = convert.(Float64,data[!,:LLoss])
     global ols = lm(@formula(LLoss ~ Step), data)
     @test coef(ols)[2] < 1e-4 # tests if loss is decaying
     @test ftest(ols.model).pval < 1e-20 # tests if loss is decaying

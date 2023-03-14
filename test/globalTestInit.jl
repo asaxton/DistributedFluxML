@@ -1,10 +1,8 @@
-using DistributedFluxML
 using Test
 using Distributed
 using ClusterManagers
 using Pkg
 using Flux
-using Zygote
 using Statistics
 using Random
 using GLM
@@ -55,7 +53,6 @@ end
     using GLM
     using DistributedFluxML
     using Flux
-    using Zygote
     using DataFrames
     using CSV
 end
@@ -95,13 +92,13 @@ epoch_length_worker = @fetchfrom p[1] nrow(rawData)
 @everywhere p labels = ["Iris-versicolor", "Iris-virginica", "Iris-setosa"]
 
 @everywhere p x_array =
-    Array(rawData[:,
-                  [:sepal_l, :sepal_w,
-                   :petal_l, :petal_w
-                   ]])
+    Array{Float32}(rawData[:,
+                           [:sepal_l, :sepal_w,
+                            :petal_l, :petal_w
+                            ]])
 
 @everywhere p y_array =
     Flux.onehotbatch(rawData[:,:class],
-                     labels)
+                labels)
 
 
