@@ -1,4 +1,4 @@
-name = "DistributedFluxML"
+name = "DistributedJLFluxML"
 uuid = "8fe19d99-2f95-4f97-b295-3943484668b0"
 authors = ["saxton <saxton@illinois.edu>"]
 version = "0.1.0"
